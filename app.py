@@ -49,6 +49,12 @@ DEBUG = os.environ.get("FLASK_DEBUG", "0") == "1"
 # Minimum species confidence to accept a find (your spec: 95%). Tunable via env —
 # 0.95 is strict, so lower it (e.g. 0.8) if real-world kid photos miss too often.
 CONFIDENCE_THRESHOLD = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.95"))
+
+# Extra plant facts to pull from Plant.id v3 (comma-separated `details` query param).
+# These power the rich plant-detail card: a reference photo, a Wikipedia blurb,
+# which parts are edible, common human uses, and any toxicity warning.
+PLANTID_DETAILS = "common_names,url,description,image,edible_parts,common_uses,toxicity"
+
 CODE_ALPHABET = string.ascii_uppercase + string.digits
 CODE_LENGTH = 6
 VALID_DURATIONS = (15, 30, 45, 60)
@@ -415,6 +421,67 @@ def my_finds(hunt_id):
 # --------------------------------------------------------------------------- #
 # Plant identification                                                        #
 # --------------------------------------------------------------------------- #
+def _detail_value(v):
+    """Plant.id detail fields come back either as a scalar or a {'value': ...}
+    object (the object form also carries citation/license). Normalize to the scalar."""
+    if isinstance(v, dict):
+        return v.get("value")
+    return v
+
+
+def _detail_attribution(v):
+    """License/citation metadata from a Plant.id detail object. Kindwise asks that
+    we credit this when displaying their descriptions/images (Wikipedia text and
+    CC-BY photos carry it). Returns {} when there's nothing to attribute."""
+    if not isinstance(v, dict):
+        return {}
+    out = {}
+    for k in ("citation", "license_name", "license_url"):
+        val = v.get(k)
+        if isinstance(val, str) and val.strip():
+            out[k] = val.strip()
+    return out
+
+
+def _image_source(details):
+    """The image detail object (preferred `image`, else first of `images`)."""
+    obj = details.get("image")
+    if not _detail_value(obj):
+        images = details.get("images")
+        if isinstance(images, list) and images:
+            obj = images[0]
+    return obj
+
+
+def _extract_plant_extras(details):
+    """Pull the kid-facing extras out of a Plant.id suggestion's `details` object:
+    a reference photo, Wikipedia text, edible parts, common uses, and toxicity —
+    plus the license/citation metadata Kindwise asks us to credit. Tolerant of
+    missing fields and of the scalar-vs-object shape differences."""
+    details = details or {}
+
+    image_obj = _image_source(details)
+    image_url = _detail_value(image_obj)
+
+    desc_obj = details.get("description")
+
+    edible = details.get("edible_parts")
+    edible = [str(e).strip() for e in edible if e] if isinstance(edible, list) else []
+
+    wiki_url = _detail_value(details.get("url"))
+
+    return {
+        "image_url": image_url if isinstance(image_url, str) else None,
+        "image_attribution": _detail_attribution(image_obj),
+        "wiki_description": _detail_value(desc_obj),
+        "description_attribution": _detail_attribution(desc_obj),
+        "edible_parts": edible,
+        "common_uses": _detail_value(details.get("common_uses")),
+        "toxicity": _detail_value(details.get("toxicity")),
+        "wiki_url": wiki_url if isinstance(wiki_url, str) else None,
+    }
+
+
 @app.route("/api/identify", methods=["POST"])
 def identify():
     data = request.get_json(silent=True) or {}
@@ -450,7 +517,7 @@ def identify():
     try:
         resp = requests.post(
             PLANTID_API_URL,
-            params={"details": "common_names"},
+            params={"details": PLANTID_DETAILS, "language": "en"},
             headers={"Api-Key": PLANTID_API_KEY, "Content-Type": "application/json"},
             json={"images": [image_b64], "classification_level": "species"},
             timeout=30,
@@ -498,6 +565,14 @@ def identify():
 
     # (4) Scoring — all plants equal (10), unless promoted in the bonus list; 2x for first finder.
     info = get_plant_info(scientific, common)
+    extras = _extract_plant_extras(top.get("details"))
+    # For the 8 curated plants we keep the hand-written kid-friendly blurb; for
+    # anything else, Plant.id's Wikipedia text beats our generic placeholder.
+    about = info["about"]
+    about_from_kindwise = False
+    if not info.get("in_catalog") and extras["wiki_description"]:
+        about = extras["wiki_description"]
+        about_from_kindwise = True
     is_first = Find.query.filter_by(hunt_id=hunt_id, scientific=scientific).first() is None
     base_points = info["base_points"]
     points = base_points * 2 if is_first else base_points
@@ -546,9 +621,17 @@ def identify():
             "confidence": round(confidence, 4),
             "emoji": info["emoji"],
             "key": info["key"],
-            "about": info["about"],
+            "about": about,
             "forage_note": info["forage_note"],
             "climate_impact": info["climate_impact"],
+            "image_url": extras["image_url"],
+            "image_attribution": extras["image_attribution"],
+            "edible_parts": extras["edible_parts"],
+            "common_uses": extras["common_uses"],
+            "toxicity": extras["toxicity"],
+            "wiki_url": extras["wiki_url"],
+            "about_from_kindwise": about_from_kindwise,
+            "description_attribution": extras["description_attribution"],
         }
     )
 

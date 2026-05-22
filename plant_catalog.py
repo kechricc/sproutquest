@@ -209,6 +209,7 @@ def get_plant_info(scientific_name, common_name=None):
             "about": entry["about"],
             "forage_note": entry["forage"],
             "climate_impact": entry["climate"],
+            "in_catalog": True,
         }
     else:
         info = _generic_info(scientific_name, common_name)
@@ -234,4 +235,5 @@ def _generic_info(scientific_name, common_name=None):
         "climate_impact": f"Like many wild plants, {display} can be affected by habitat loss, "
                           f"pollution, and our changing climate. Protecting wild spaces helps it "
                           f"keep growing.",
+        "in_catalog": False,
     }
