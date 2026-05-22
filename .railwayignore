@@ -1,0 +1,12 @@
+# Never upload these to Railway (secrets, local-only, or huge)
+.venv/
+.git/
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+cloudflared.exe
+server.log
+__pycache__/
+_design_handoff/
