@@ -8,6 +8,8 @@ final score and the plants they discovered.
 
 Works in a **phone browser — no app install**.
 
+> 🪴 Plant identification is powered by the **[Plant.id API by Kindwise](https://www.kindwise.com/plant-id)**.
+
 ---
 
 ## Tech stack
@@ -17,7 +19,7 @@ Works in a **phone browser — no app install**.
 | Backend | Flask (Python 3.11) |
 | Database | SQLite via SQLAlchemy |
 | Real-time | Flask-SocketIO (`threading` mode — WebSocket when available, else long-polling) |
-| Plant ID | [Plant.id](https://web.plant.id) API **v3** |
+| Plant ID | [Plant.id by Kindwise](https://www.kindwise.com/plant-id) API **v3** |
 | Frontend | Single HTML file (`static/index.html`) served by Flask |
 | Deploy | Railway (`Procfile` + gunicorn) |
 
@@ -71,7 +73,7 @@ on your phone. The login password is whatever you set as `SPROUTQUEST_PASSWORD`.
 
 ### Getting a Plant.id API key
 
-1. Sign up at **https://web.plant.id**.
+1. Sign up for the **[Plant.id API by Kindwise](https://www.kindwise.com/plant-id)**.
 2. Open the **API** tab and copy your key.
 3. Put it in `.env` as `PLANTID_API_KEY=...`.
 
