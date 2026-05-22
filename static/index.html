@@ -1350,6 +1350,11 @@ async function onFilePicked(input) {
 let identifying = false;
 async function sendIdentify(dataUrl) {
   if (identifying) return;
+  // Reject oversized photos before uploading (the server also caps requests at 10MB).
+  if (dataUrl && dataUrl.length > 9 * 1024 * 1024) {
+    showToast('📷', 'Photo too large', 'That photo is too big to send — try getting a bit closer instead.');
+    return;
+  }
   identifying = true;
   setScanning(true);
   try {

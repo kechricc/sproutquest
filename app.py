@@ -124,7 +124,7 @@ def require_login():
 
 
 @app.route("/auth/login", methods=["POST"])
-@limiter.limit("15 per minute")
+@limiter.limit("40 per minute")
 def login():
     data = request.get_json(silent=True) or {}
     password = (data.get("password") or "").strip()
