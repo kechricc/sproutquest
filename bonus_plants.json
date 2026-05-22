@@ -1,0 +1,5 @@
+{
+  "_README": "Your master bonus list. Map a plant to a custom point value to make it score higher. Key = scientific name (e.g. 'Asclepias syriaca') OR friendly catalog key (e.g. 'milkweed'). Value = base points (default for everything else is 10). The first finder of a species still earns 2x on top of this. Keys starting with '_' are ignored, so the examples below are inactive until you rename/uncomment them. You can also set the BONUS_PLANTS env var to the same JSON (it overrides this file) — handy on Railway to change scoring per area without redeploying.",
+  "_example_milkweed": 50,
+  "_example_Trillium grandiflorum": 30
+}
