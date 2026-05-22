@@ -24,6 +24,9 @@ import requests
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, request, send_from_directory, session
 from flask_socketio import SocketIO, emit, join_room  # noqa: F401
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from models import Find, Hunt, Player, db
 from plant_catalog import get_plant_info
@@ -73,6 +76,8 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 # SQLite + threads: the auto-end timer runs in a background thread, so allow the
 # connection to be used across threads. Fine for this app's low write volume.
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"check_same_thread": False}}
+# Reject oversized request bodies (e.g. a huge image upload) with a 413.
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB
 
 db.init_app(app)
 # Threading async mode — no eventlet/gevent monkey-patching, behaves the same on
@@ -80,6 +85,14 @@ db.init_app(app)
 # Socket.IO falls back to HTTP long-polling. Single worker, so no message queue is
 # needed (add message_queue="redis://..." here to scale to multiple workers).
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+# Behind Railway's proxy: trust X-Forwarded-For/-Proto so rate limits see the real
+# client IP (and generated URLs use https).
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+# Rate limiter — in-memory (fine for a single worker). Only the login route is limited,
+# to stop password brute-forcing without affecting normal play.
+limiter = Limiter(get_remote_address, app=app, default_limits=[], storage_uri="memory://")
 
 with app.app_context():
     db.create_all()
@@ -111,6 +124,7 @@ def require_login():
 
 
 @app.route("/auth/login", methods=["POST"])
+@limiter.limit("15 per minute")
 def login():
     data = request.get_json(silent=True) or {}
     password = (data.get("password") or "").strip()
@@ -560,6 +574,11 @@ def index():
 @app.route("/ping")
 def ping():
     return jsonify({"status": "ok"})
+
+
+@app.errorhandler(413)
+def too_large(_e):
+    return jsonify({"success": False, "message": "That photo is too large — try again with a smaller one."}), 413
 
 
 if __name__ == "__main__":
