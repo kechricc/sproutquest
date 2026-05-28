@@ -767,8 +767,8 @@ input { font-family:var(--font); }
           <video id="cam-video" autoplay playsinline muted></video>
           <div class="scan-bg"></div>
           <div class="scan-hint">
-            <div class="scan-hint-title">📷 Point at a plant</div>
-            <div class="scan-hint-sub">Hold steady · Center leaves in the frame</div>
+            <div class="scan-hint-title" id="scan-hint-title">📷 Photo 1 of 3</div>
+            <div class="scan-hint-sub" id="scan-hint-sub">Snap a clear photo of one plant</div>
           </div>
           <div class="scan-frame">
             <div class="sc tl"></div><div class="sc tr"></div><div class="sc bl"></div><div class="sc br"></div>
@@ -776,9 +776,15 @@ input { font-family:var(--font); }
           </div>
         </div>
         <div class="scan-actions">
-          <button class="shutter-btn" id="shutter-btn" onclick="captureAndIdentify()">📸 Identify Plant</button>
-          <label class="upload-fallback" id="upload-fallback">Camera blocked? Pick a photo instead
-            <input type="file" accept="image/*" capture="environment" id="file-input" onchange="onFilePicked(this)"/>
+          <div class="capture-strip" id="capture-strip">
+            <div class="cap-slot" id="cap-slot-0">1</div>
+            <div class="cap-slot" id="cap-slot-1">2</div>
+            <div class="cap-slot" id="cap-slot-2">3</div>
+          </div>
+          <button class="shutter-btn" id="shutter-btn" onclick="onShutter()">📸 Take Photo 1 of 3</button>
+          <button class="retake-btn" id="retake-btn" onclick="clearCaptures()" style="display:none;">↺ Start over</button>
+          <label class="upload-fallback" id="upload-fallback">Camera blocked? Pick 3 photos instead
+            <input type="file" accept="image/*" capture="environment" multiple id="file-input" onchange="onFilePicked(this)"/>
           </label>
         </div>
       </div>
@@ -908,6 +914,15 @@ input { font-family:var(--font); }
 #cam-video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:none; z-index:1; }
 .scan-hint, .scan-frame{ z-index:3; }
 .scan-actions{ padding:14px 16px 0; display:flex; flex-direction:column; gap:10px; }
+.capture-strip{ display:flex; gap:8px; justify-content:center; }
+.cap-slot{ width:46px; height:46px; border-radius:10px; border:2px dashed #cdd5c0; background:#f3f6ee;
+  overflow:hidden; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:900; color:#9aa890; }
+.cap-slot.filled{ border-style:solid; border-color:#5aaa1e; color:transparent; }
+.cap-slot img{ width:100%; height:100%; object-fit:cover; display:block; }
+.retake-btn{ width:100%; padding:10px; border:0; border-radius:99px; background:#eef0ec; color:var(--text2);
+  font-family:inherit; font-size:13px; font-weight:800; cursor:pointer; }
+.retake-btn:active{ transform:translateY(1px); }
 .shutter-btn{ width:100%; padding:16px; border:0; border-radius:99px;
   background:linear-gradient(180deg,#86c34a,#5aaa1e); color:#fff; font-family:inherit;
   font-size:18px; font-weight:900; box-shadow:0 5px 0 #3d7a10, 0 8px 18px rgba(0,0,0,.2); cursor:pointer; }
@@ -969,6 +984,7 @@ const state = {
   rank: 1,
   playerCount: 1,
   myFinds: [],            // [{key, name, scientific, emoji, pts, first, t, about, forage, climate, image, edible, uses, toxicity, wiki}]
+  captures: [],           // data URLs of the photos collected for the current scan (need REQUIRED_PHOTOS)
   firstFinds: {},         // species -> {finder, emoji, name, t}
   leaderboard: [],        // server rows: [{player_id, name, score, finds, rank}]
 };
@@ -1062,6 +1078,7 @@ function syncMeFromLeaderboard() {
 function startHuntSession() {
   state.ended = false;
   state.myFinds = [];
+  state.captures = [];
   state.firstFinds = {};
   renderTopBar();
   renderMyFinds();
@@ -1071,6 +1088,7 @@ function startHuntSession() {
   goTo('hunt');
   startTimer();
   startCamera();
+  renderCaptureStrip();
 }
 
 /* ───────── SCREEN ROUTING ───────── */
@@ -1343,62 +1361,148 @@ function stopCamera() {
   if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
 }
 
-/* ───────── IDENTIFY (camera frame -> Plant.id via backend) ───────── */
-async function captureAndIdentify() {
-  if (!state.huntId) return;
-  const video = document.getElementById('cam-video');
-  let dataUrl = null;
-  if (camStream && video.videoWidth) {
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
-    dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-  }
-  if (!dataUrl) { showToast('📷', 'No camera', 'Use the “Pick a photo” button below the viewfinder.'); return; }
-  await sendIdentify(dataUrl);
-}
-
-async function onFilePicked(input) {
-  const file = input.files && input.files[0];
-  if (!file) return;
-  const dataUrl = await new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.onerror = reject;
-    r.readAsDataURL(file);
-  });
-  await sendIdentify(dataUrl);
-  input.value = '';
-}
-
+/* ───────── IDENTIFY (collect REQUIRED_PHOTOS, then one Plant.id call) ───────── */
+const REQUIRED_PHOTOS = 3;
 let identifying = false;
-async function sendIdentify(dataUrl) {
+
+// Downscale a source to a JPEG data URL — keeps the 3-photo payload small.
+function toScaledJpeg(srcW, srcH, drawFn, maxDim = 1080, quality = 0.75) {
+  let w = srcW, h = srcH;
+  const m = Math.max(w, h);
+  if (m > maxDim) { const s = maxDim / m; w = Math.round(w * s); h = Math.round(h * s); }
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  drawFn(canvas.getContext('2d'), w, h);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+function compressDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(toScaledJpeg(img.naturalWidth, img.naturalHeight,
+      (ctx, w, h) => ctx.drawImage(img, 0, 0, w, h)));
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+// Progressive guidance, indexed by how many photos are already captured
+// (i.e. the prompt for the NEXT photo). Makes the "same plant, 3 angles" idea clear.
+const CAPTURE_PROMPTS = [
+  { btn: '📸 Take Photo (1 of 3)',     title: '📷 Photo 1 of 3', sub: 'Snap a clear photo of one plant' },
+  { btn: '📸 One more angle (2 of 3)', title: '📷 Photo 2 of 3', sub: 'Take one more of the SAME plant — from a slightly different angle' },
+  { btn: '📸 One last photo (3 of 3)', title: '📷 Photo 3 of 3', sub: 'One last photo of the same plant!' },
+];
+
+// Reflect state.captures in the thumbnail slots, the shutter button, and the hint.
+function renderCaptureStrip() {
+  for (let i = 0; i < REQUIRED_PHOTOS; i++) {
+    const slot = document.getElementById('cap-slot-' + i);
+    if (!slot) continue;
+    if (state.captures[i]) {
+      slot.classList.add('filled');
+      slot.innerHTML = `<img src="${state.captures[i]}" alt="">`;
+    } else {
+      slot.classList.remove('filled');
+      slot.textContent = String(i + 1);
+    }
+  }
+  if (identifying) return;   // the "Identifying…" copy is owned by setScanning
+  const n = state.captures.length;
+  const p = CAPTURE_PROMPTS[Math.min(n, REQUIRED_PHOTOS - 1)];
+  const btn = document.getElementById('shutter-btn');
+  if (btn) btn.textContent = n < REQUIRED_PHOTOS ? p.btn : '🔎 Identify Plant';
+  const title = document.getElementById('scan-hint-title');
+  const sub = document.getElementById('scan-hint-sub');
+  if (n < REQUIRED_PHOTOS) {
+    if (title) title.textContent = p.title;
+    if (sub) sub.textContent = p.sub;
+  }
+  const retake = document.getElementById('retake-btn');
+  if (retake) retake.style.display = n > 0 ? 'block' : 'none';
+}
+
+function clearCaptures() {
+  state.captures = [];
+  renderCaptureStrip();
+}
+
+// Shutter: grab one frame; auto-submit once we have all REQUIRED_PHOTOS.
+function onShutter() {
+  if (!state.huntId || identifying) return;
+  if (state.captures.length >= REQUIRED_PHOTOS) { submitCaptures(); return; }
+  const video = document.getElementById('cam-video');
+  if (!(camStream && video.videoWidth)) {
+    showToast('📷', 'No camera', 'Use the “Pick 3 photos” button below the viewfinder.');
+    return;
+  }
+  state.captures.push(toScaledJpeg(video.videoWidth, video.videoHeight,
+    (ctx, w, h) => ctx.drawImage(video, 0, 0, w, h)));
+  renderCaptureStrip();
+  if (state.captures.length >= REQUIRED_PHOTOS) submitCaptures();
+}
+
+// Upload fallback: accept one or several files, filling up to REQUIRED_PHOTOS.
+async function onFilePicked(input) {
+  const files = Array.from(input.files || []);
+  for (const file of files) {
+    if (state.captures.length >= REQUIRED_PHOTOS) break;
+    try {
+      const raw = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+      state.captures.push(await compressDataUrl(raw));
+    } catch (_) { /* skip unreadable file */ }
+  }
+  input.value = '';
+  renderCaptureStrip();
+  if (state.captures.length >= REQUIRED_PHOTOS) submitCaptures();
+}
+
+async function submitCaptures() {
   if (identifying) return;
-  // Reject oversized photos before uploading (the server also caps requests at 10MB).
-  if (dataUrl && dataUrl.length > 9 * 1024 * 1024) {
-    showToast('📷', 'Photo too large', 'That photo is too big to send — try getting a bit closer instead.');
+  if (state.captures.length < REQUIRED_PHOTOS) {
+    showToast('📷', `Need ${REQUIRED_PHOTOS} photos`, `Take ${REQUIRED_PHOTOS} photos of the plant first.`);
+    return;
+  }
+  const images = state.captures.slice(0, REQUIRED_PHOTOS);
+  // Reject oversized payloads before uploading (the server also caps requests).
+  if (images.reduce((s, d) => s + d.length, 0) > 9 * 1024 * 1024) {
+    showToast('📷', 'Photos too large', 'Those photos are too big to send — try getting a bit closer.');
     return;
   }
   identifying = true;
   setScanning(true);
   try {
-    const r = await api('/api/identify', { image: dataUrl, hunt_id: state.huntId });
+    const r = await api('/api/identify', { images, hunt_id: state.huntId });
     if (r.success) {
       registerFind(r);
+      state.captures = [];          // start fresh for the next plant
     } else {
       showToast('🔍', 'Try again', r.message || 'Could not identify that one.');
+      state.captures = [];          // bad shots — retake all three
     }
   } catch (_) {
     showToast('🌐', 'Connection', 'Could not reach the server — try again.');
+    // keep the photos so they can retry without re-shooting
   } finally {
-    setScanning(false);
     identifying = false;
+    setScanning(false);
+    renderCaptureStrip();
   }
 }
+
 function setScanning(on) {
   const btn = document.getElementById('shutter-btn');
-  if (btn) { btn.disabled = on; btn.textContent = on ? '🔎 Identifying…' : '📸 Identify Plant'; }
+  if (btn) { btn.disabled = on; if (on) btn.textContent = '🔎 Identifying…'; }
+  if (on) {
+    const title = document.getElementById('scan-hint-title');
+    const sub = document.getElementById('scan-hint-sub');
+    if (title) title.textContent = '🔎 Identifying…';
+    if (sub) sub.textContent = 'Checking all 3 photos…';
+  }
   document.getElementById('hs-scan').classList.toggle('scanning', on);
 }
 
@@ -1641,7 +1745,7 @@ function playAgain() {
   // Clear the previous session so the next create/join starts clean.
   Object.assign(state, {
     joinCode: '', huntId: null, playerId: null, isHost: false, endTime: null, ended: false,
-    score: 0, plants: 0, rank: 1, playerCount: 1, myFinds: [], firstFinds: {}, leaderboard: [],
+    score: 0, plants: 0, rank: 1, playerCount: 1, myFinds: [], captures: [], firstFinds: {}, leaderboard: [],
   });
   // Reset setup card phases to initial
   document.getElementById('start-phase-duration').style.display = 'block';

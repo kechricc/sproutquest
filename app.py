@@ -55,6 +55,10 @@ CONFIDENCE_THRESHOLD = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.95"))
 # which parts are edible, common human uses, and any toxicity warning.
 PLANTID_DETAILS = "common_names,url,description,image,edible_parts,common_uses,toxicity"
 
+# Players must submit this many photos of the same plant per identification; all of
+# them are sent together in one Plant.id call (multiple angles improve accuracy).
+REQUIRED_PHOTOS = int(os.environ.get("REQUIRED_PHOTOS", "3"))
+
 CODE_ALPHABET = string.ascii_uppercase + string.digits
 CODE_LENGTH = 6
 VALID_DURATIONS = (15, 30, 45, 60)
@@ -486,7 +490,6 @@ def _extract_plant_extras(details):
 def identify():
     data = request.get_json(silent=True) or {}
     hunt_id = (data.get("hunt_id") or "").strip().upper()
-    image_b64 = data.get("image") or ""
 
     hunt = db.session.get(Hunt, hunt_id)
     if not hunt:
@@ -499,16 +502,29 @@ def identify():
     if not player:
         return jsonify({"success": False, "message": "Join the hunt before scanning plants."}), 403
 
-    if not image_b64:
-        return jsonify({"success": False, "message": "No photo received — try again."}), 400
+    # Collect the photos: prefer the `images` list; tolerate a lone `image` so an
+    # older cached client still gets a clear "need N photos" message rather than a 500.
+    raw_images = data.get("images")
+    if not isinstance(raw_images, list):
+        raw_images = [data["image"]] if data.get("image") else []
 
-    # Accept a raw base64 string or a full data URL.
-    if image_b64.startswith("data:"):
-        image_b64 = image_b64.split(",", 1)[-1]
-    try:
-        base64.b64decode(image_b64, validate=True)
-    except (binascii.Error, ValueError):
-        return jsonify({"success": False, "message": "That photo didn't come through — try again."}), 400
+    images_b64 = []
+    for img in raw_images:
+        if not isinstance(img, str) or not img:
+            continue
+        # Accept a raw base64 string or a full data URL.
+        b64 = img.split(",", 1)[-1] if img.startswith("data:") else img
+        try:
+            base64.b64decode(b64, validate=True)
+        except (binascii.Error, ValueError):
+            return jsonify({"success": False, "message": "One of the photos didn't come through — try again."}), 400
+        images_b64.append(b64)
+
+    if len(images_b64) != REQUIRED_PHOTOS:
+        return jsonify({
+            "success": False,
+            "message": f"Take {REQUIRED_PHOTOS} photos of the same plant (from different angles) before identifying.",
+        }), 400
 
     if not PLANTID_API_KEY:
         return jsonify({"success": False, "message": "Plant identification isn't configured yet."}), 503
@@ -519,7 +535,7 @@ def identify():
             PLANTID_API_URL,
             params={"details": PLANTID_DETAILS, "language": "en"},
             headers={"Api-Key": PLANTID_API_KEY, "Content-Type": "application/json"},
-            json={"images": [image_b64], "classification_level": "species"},
+            json={"images": images_b64, "classification_level": "species"},
             timeout=30,
         )
     except requests.RequestException:
