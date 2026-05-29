@@ -724,6 +724,7 @@ input { font-family:var(--font); }
         </div>
       </div>
     </div>
+    <button class="journal-link" onclick="openJournal('setup')">📔 My Plant Journal<span class="journal-count"></span></button>
   </section>
 
   <!-- ════════ SCREEN 3: HUNT MODE ════════ -->
@@ -874,8 +875,26 @@ input { font-family:var(--font); }
         <div class="recap-scroll" id="recap-scroll"></div>
       </div>
       <div class="end-action">
+        <button class="journal-link end" onclick="openJournal('end')">📔 View Plant Journal<span class="journal-count"></span></button>
         <button class="play-again-btn" onclick="playAgain()">🌿 Play Again</button>
       </div>
+    </div>
+  </section>
+
+  <!-- ════════ SCREEN 5: PLANT JOURNAL ════════ -->
+  <section class="screen" id="scr-journal" data-screen-label="05 Journal">
+    <div class="journal-hero">
+      <button class="journal-back" onclick="closeJournal()" aria-label="Back">←</button>
+      <div>
+        <div class="journal-title">📔 Plant Journal</div>
+        <div class="journal-stats-line" id="journal-stats"></div>
+      </div>
+    </div>
+    <div class="journal-list" id="journal-list"></div>
+    <div class="journal-empty" id="journal-empty" style="display:none;">
+      <div class="journal-empty-emoji">🌱</div>
+      <div class="journal-empty-title">No plants found yet</div>
+      <div class="journal-empty-sub">Plants you discover on hunts will appear here.</div>
     </div>
   </section>
 
@@ -897,6 +916,7 @@ input { font-family:var(--font); }
     <div class="detail-section" id="detail-uses-sec"><div class="detail-h">🛠️ COMMON USES</div><div id="detail-uses"></div></div>
     <div class="detail-section" id="detail-climate-sec"><div class="detail-h">🌍 HUMAN IMPACT</div><div id="detail-climate"></div></div>
     <a class="detail-wiki" id="detail-wiki" href="#" target="_blank" rel="noopener" style="display:none;">📖 Read more on Wikipedia →</a>
+    <div id="detail-later-hint" style="display:none;text-align:center;margin-top:14px;padding:14px 12px;border-radius:14px;background:#f3f6ee;color:var(--text2);font-weight:800;font-size:13px;">🌱 More about this plant unlocks after the hunt</div>
   </div>
 </div>
 
@@ -964,6 +984,39 @@ input { font-family:var(--font); }
 .detail-section{ margin-top:12px; }
 .detail-h{ font-size:11px; font-weight:900; letter-spacing:1px; color:var(--green-d); margin-bottom:3px; }
 .detail-section > div:last-child{ font-size:13px; font-weight:700; color:var(--text2); line-height:1.45; }
+
+/* ── Plant Journal screen + entry-point chips ── */
+.journal-link{ display:flex; align-items:center; justify-content:center; gap:8px;
+  width:calc(100% - 32px); max-width:320px; margin:4px auto 28px; padding:14px 18px;
+  border-radius:99px; border:3px solid var(--green); background:#fff;
+  color:var(--green-d); font-family:inherit; font-size:15px; font-weight:900; cursor:pointer;
+  box-shadow:0 4px 0 var(--green-d), 0 6px 14px rgba(0,0,0,.12); }
+.journal-link:active{ transform:translateY(2px); box-shadow:0 2px 0 var(--green-d), 0 4px 10px rgba(0,0,0,.12); }
+.journal-link.end{ width:100%; max-width:none; margin:0 0 12px; }
+.journal-hero{ position:sticky; top:0; z-index:5; background:#fff;
+  padding:14px 16px 12px; border-bottom:1px solid #eaeee2;
+  display:flex; align-items:center; gap:10px; }
+.journal-back{ width:36px; height:36px; flex:0 0 auto; border-radius:50%; border:0;
+  background:#eef0ec; color:var(--text); font-family:inherit; font-size:18px; font-weight:900;
+  cursor:pointer; }
+.journal-back:active{ transform:translateY(1px); }
+.journal-title{ font-size:20px; font-weight:900; color:var(--text); line-height:1.1; }
+.journal-stats-line{ font-size:12px; font-weight:800; color:var(--text2); margin-top:2px; }
+.journal-list{ padding:14px 16px 100px; display:flex; flex-direction:column; gap:10px; }
+.journal-card{ display:grid; grid-template-columns:56px 1fr; gap:12px; align-items:center;
+  padding:10px; background:#fff; border:2px solid #eaeee2; border-radius:14px; cursor:pointer; }
+.journal-card:active{ transform:translateY(1px); }
+.journal-card.multi{ border-color:#86c34a; background:#f7fbf0; }
+.journal-thumb{ width:56px; height:56px; border-radius:12px; background:#f3f6ee;
+  display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:28px; }
+.journal-thumb img.mf-thumb{ width:100%; height:100%; object-fit:cover; display:block; }
+.journal-name{ font-size:15px; font-weight:900; color:var(--text); line-height:1.2; }
+.journal-sci{ font-size:11px; font-weight:700; color:var(--text3); font-style:italic; margin-top:1px; }
+.journal-meta{ font-size:11px; font-weight:800; color:var(--text2); margin-top:4px; }
+.journal-empty{ padding:60px 24px; text-align:center; }
+.journal-empty-emoji{ font-size:48px; }
+.journal-empty-title{ margin-top:10px; font-size:18px; font-weight:900; color:var(--text); }
+.journal-empty-sub{ margin-top:6px; font-size:13px; font-weight:700; color:var(--text2); }
 </style>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
@@ -1518,6 +1571,7 @@ function registerFind(r) {
     aboutWiki: !!r.about_from_kindwise,
   };
   state.myFinds.push(find);
+  addToJournal(find);
   // Optimistic update; the server's score_update event reconciles to the authoritative totals.
   state.plants = state.myFinds.length;
   state.score += r.points;
@@ -1531,6 +1585,87 @@ function registerFind(r) {
   if (r.is_first) {
     setTimeout(() => showToast(r.emoji, 'First discovery!', `You found the first ${r.plant_name}! 2× points awarded.`), 800);
   }
+}
+
+/* ───────── PLANT JOURNAL (localStorage, cross-game) ───────── */
+// A device-local catalog of every species the player has ever identified — survives
+// across hunts without needing an account. Key: scientific name; value: the find
+// fields plus firstSeen/lastSeen/count so we can show "found 3 times · last seen 2d ago".
+const JOURNAL_KEY = 'sproutquest:journal:v1';
+let _journalReturnTo = 'setup';
+
+function loadJournal() {
+  try {
+    const raw = localStorage.getItem(JOURNAL_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) { return {}; }
+}
+function saveJournal(j) {
+  try { localStorage.setItem(JOURNAL_KEY, JSON.stringify(j)); }
+  catch (_) { /* quota exceeded — silently skip; journal stays at last good state */ }
+}
+function addToJournal(f) {
+  const key = f.scientific || f.key || f.name;
+  if (!key) return;
+  const j = loadJournal();
+  const prev = j[key];
+  const now = f.t || Date.now();
+  j[key] = {
+    key: f.key, name: f.name, scientific: f.scientific, emoji: f.emoji, image: f.image,
+    about: f.about, forage: f.forage, climate: f.climate, edible: f.edible,
+    uses: f.uses, toxicity: f.toxicity, wiki: f.wiki,
+    imgAttr: f.imgAttr, descAttr: f.descAttr, aboutWiki: f.aboutWiki,
+    firstSeen: prev ? prev.firstSeen : now,
+    lastSeen: now,
+    count: ((prev && prev.count) || 0) + 1,
+  };
+  saveJournal(j);
+  updateJournalCounts();
+}
+function getJournalArray() {
+  return Object.values(loadJournal()).sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+}
+// Refresh the "X plants" pill on every entry point (setup + end screens).
+function updateJournalCounts() {
+  const n = Object.keys(loadJournal()).length;
+  document.querySelectorAll('.journal-count').forEach(el => {
+    el.textContent = n > 0 ? ` · ${n} plant${n === 1 ? '' : 's'}` : '';
+  });
+}
+
+function openJournal(returnTo) {
+  _journalReturnTo = returnTo || 'setup';
+  renderJournal();
+  goTo('journal');
+}
+function closeJournal() { goTo(_journalReturnTo); }
+
+function renderJournal() {
+  const items = getJournalArray();
+  document.getElementById('journal-stats').textContent =
+    items.length === 0 ? '' : `${items.length} unique plant${items.length === 1 ? '' : 's'} discovered`;
+  const list = document.getElementById('journal-list');
+  const empty = document.getElementById('journal-empty');
+  if (!items.length) {
+    list.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = items.map((f, i) => `
+    <div class="journal-card${(f.count || 1) > 1 ? ' multi' : ''}" onclick="openJournalDetail(${i})">
+      <div class="journal-thumb">${findBadge(f)}</div>
+      <div class="journal-info">
+        <div class="journal-name">${escapeHtml(f.name || '')}</div>
+        <div class="journal-sci">${escapeHtml(f.scientific || '')}</div>
+        <div class="journal-meta">Found ${f.count} time${f.count === 1 ? '' : 's'} · last seen ${timeAgo(f.lastSeen)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+function openJournalDetail(i) {
+  const items = getJournalArray();
+  if (items[i]) openFindDetail(items[i], true);
 }
 
 /* ───────── PLANT DETAIL (tap a find) ───────── */
@@ -1583,8 +1718,12 @@ function setAboutCredit(f) {
   el.style.display = '';
 }
 
-function openFindDetail(idx) {
-  const f = state.myFinds[idx];
+// `full` defaults to false: during the hunt we show only the photo + name so kids can
+// stay in the game; the full fun-fact / foraging / impact card is reserved for the
+// post-hunt recap, where there's time to read. The first arg can be a numeric index
+// into state.myFinds (in-hunt callers) or a find-shaped object (journal callers).
+function openFindDetail(idxOrFind, full = false) {
+  const f = (typeof idxOrFind === 'number') ? state.myFinds[idxOrFind] : idxOrFind;
   if (!f) return;
   const img = document.getElementById('detail-img');
   const emoji = document.getElementById('detail-emoji');
@@ -1601,16 +1740,30 @@ function openFindDetail(idx) {
   setImgCredit(f);
   document.getElementById('detail-name').textContent = f.name || '';
   document.getElementById('detail-sci').textContent = f.scientific || '';
-  setDetailSection('detail-about-sec', 'detail-about', f.about);
-  setAboutCredit(f);
-  setDetailSection('detail-forage-sec', 'detail-forage', f.forage);
-  setDetailChips('detail-edible-sec', 'detail-edible', f.edible);
-  setDetailSection('detail-tox-sec', 'detail-tox', f.toxicity);
-  setDetailSection('detail-uses-sec', 'detail-uses', f.uses);
-  setDetailSection('detail-climate-sec', 'detail-climate', f.climate);
+
+  const sectionIds = ['detail-about-sec', 'detail-forage-sec', 'detail-edible-sec',
+                      'detail-tox-sec', 'detail-uses-sec', 'detail-climate-sec'];
   const wiki = document.getElementById('detail-wiki');
-  if (f.wiki) { wiki.href = f.wiki; wiki.style.display = 'block'; }
-  else { wiki.style.display = 'none'; }
+  const laterHint = document.getElementById('detail-later-hint');
+
+  if (!full) {
+    sectionIds.forEach(id => { document.getElementById(id).style.display = 'none'; });
+    document.getElementById('detail-about-credit').style.display = 'none';
+    wiki.style.display = 'none';
+    laterHint.style.display = '';
+  } else {
+    laterHint.style.display = 'none';
+    setDetailSection('detail-about-sec', 'detail-about', f.about);
+    setAboutCredit(f);
+    setDetailSection('detail-forage-sec', 'detail-forage', f.forage);
+    setDetailChips('detail-edible-sec', 'detail-edible', f.edible);
+    setDetailSection('detail-tox-sec', 'detail-tox', f.toxicity);
+    setDetailSection('detail-uses-sec', 'detail-uses', f.uses);
+    setDetailSection('detail-climate-sec', 'detail-climate', f.climate);
+    if (f.wiki) { wiki.href = f.wiki; wiki.style.display = 'block'; }
+    else { wiki.style.display = 'none'; }
+  }
+
   document.getElementById('detail-modal').classList.add('show');
 }
 function hideDetail() { document.getElementById('detail-modal').classList.remove('show'); }
@@ -1715,7 +1868,7 @@ function endHunt() {
     scroll.innerHTML = `<div style="text-align:center;padding:30px 12px;color:var(--text3);font-weight:800;font-size:13px;">No plants found this round. <br>Try again next hunt! 🌱</div>`;
   } else {
     scroll.innerHTML = state.myFinds.map((f, idx) => `
-      <div class="mf-row${f.first ? ' first' : ''}" style="margin-bottom:8px;" onclick="openFindDetail(${idx})">
+      <div class="mf-row${f.first ? ' first' : ''}" style="margin-bottom:8px;" onclick="openFindDetail(${idx}, true)">
         <div class="mf-emoji">${findBadge(f)}</div>
         <div class="mf-info">
           <div class="mf-name">${escapeHtml(f.name)} ${f.first ? '<span class="first-pill">FIRST!</span>' : ''}</div>
@@ -1775,6 +1928,7 @@ document.getElementById('pin-input').addEventListener('input', (e) => {
 // Initial render
 renderTopBar();
 renderLeaderboard();
+updateJournalCounts();
 </script>
 </body>
 </html>
