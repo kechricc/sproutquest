@@ -565,8 +565,20 @@ def identify():
     common_names = (top.get("details") or {}).get("common_names") or []
     common = common_names[0] if common_names else None
 
+    # Log every identification's top probability so the confidence threshold can be tuned
+    # from real data. Photos aren't stored, so the timestamp (server time, UTC on Railway)
+    # is the key for matching a log line back to the scan that produced it.
+    accepted = confidence >= CONFIDENCE_THRESHOLD
+    print(
+        f"{datetime.now().isoformat(timespec='seconds')} identify: "
+        f"player={player.name} photos={len(images_b64)} -> {scientific or '?'} "
+        f"p={confidence:.2f} "
+        f"{'ACCEPTED' if accepted else f'REJECTED (<{CONFIDENCE_THRESHOLD:.2f})'}",
+        flush=True,
+    )
+
     # (2) Confidence gate
-    if confidence < CONFIDENCE_THRESHOLD:
+    if not accepted:
         return jsonify(
             {
                 "success": False,

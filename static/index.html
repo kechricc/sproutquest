@@ -1366,7 +1366,7 @@ const REQUIRED_PHOTOS = 3;
 let identifying = false;
 
 // Downscale a source to a JPEG data URL — keeps the 3-photo payload small.
-function toScaledJpeg(srcW, srcH, drawFn, maxDim = 1080, quality = 0.75) {
+function toScaledJpeg(srcW, srcH, drawFn, maxDim = 1280, quality = 0.82) {
   let w = srcW, h = srcH;
   const m = Math.max(w, h);
   if (m > maxDim) { const s = maxDim / m; w = Math.round(w * s); h = Math.round(h * s); }
