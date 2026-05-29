@@ -1015,7 +1015,33 @@ input { font-family:var(--font); }
 .journal-empty-emoji{ font-size:48px; }
 .journal-empty-title{ margin-top:10px; font-size:18px; font-weight:900; color:var(--text); }
 .journal-empty-sub{ margin-top:6px; font-size:13px; font-weight:700; color:var(--text2); }
+
+/* ── Dev panel (visible only with ?dev=1 in URL) — for desk-testing without real photos ── */
+#dev-panel{ display:none; position:fixed; top:8px; right:8px; z-index:9999;
+  background:rgba(0,0,0,.78); color:#fff; padding:8px 10px; border-radius:10px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; min-width:120px;
+  box-shadow:0 6px 18px rgba(0,0,0,.4); }
+#dev-panel.expanded{ display:block; }
+.dev-panel-h{ font-weight:900; letter-spacing:1.5px; text-align:center; margin-bottom:6px;
+  border-bottom:1px solid rgba(255,255,255,.25); padding-bottom:4px; }
+.dev-btn{ display:block; width:100%; margin-top:5px; padding:6px 8px; font-size:11px;
+  font-family:inherit; background:rgba(255,255,255,.15); color:#fff;
+  border:1px solid rgba(255,255,255,.3); border-radius:6px; cursor:pointer; text-align:left; }
+.dev-btn:hover{ background:rgba(255,255,255,.25); }
+.dev-btn:active{ transform:translateY(1px); }
+.dev-btn.danger{ background:rgba(220,38,38,.3); border-color:rgba(220,38,38,.5); }
 </style>
+<!-- Dev panel — hidden until ?dev=1 appears in the URL. Lets you exercise the find flow,
+     celebration, photo card, my-finds view, journal, and end screen without scanning a real plant. -->
+<div id="dev-panel">
+  <div class="dev-panel-h">🧪 DEV TOOLS</div>
+  <button class="dev-btn" onclick="dummyFind()">🌳 Dummy Find</button>
+  <button class="dev-btn" onclick="dummyFind({first:true})">⭐ Dummy First Find</button>
+  <button class="dev-btn" onclick="dummyFind({sparse:true})">🌫️ Sparse Data Find</button>
+  <button class="dev-btn" onclick="if (typeof endHunt==='function') endHunt();">🏁 Jump to End</button>
+  <button class="dev-btn danger" onclick="if (confirm('Clear local Plant Journal?')) { localStorage.removeItem(JOURNAL_KEY); updateJournalCounts(); }">🗑️ Clear Journal</button>
+</div>
+
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
 /* ───────── STATE ───────── */
@@ -1578,6 +1604,86 @@ function setScanning(on) {
   document.getElementById('hs-scan').classList.toggle('scanning', on);
 }
 
+/* ───────── DEV: synthetic finds (no camera, no API call) ───────── */
+// Shapes mimic the /api/identify response so they flow through registerFind unchanged.
+const DUMMY_PLANTS = [
+  {
+    key: 'quercus_rubra', plant_name: 'Red Oak', scientific_name: 'Quercus rubra', emoji: '🌳',
+    base_points: 10,
+    about: "Red oaks can live 200 to 400 years and turn brilliant scarlet in autumn — one of the most striking trees in North America.",
+    forage_note: "Acorns are bitter raw, but were a staple food for many tribes after leaching out the tannins.",
+    climate_impact: "Oak trees support more wildlife than nearly any other tree — hundreds of moth, bird, and squirrel species depend on them.",
+    edible_parts: ['seeds'],
+    common_uses: "Hardwood timber for furniture and flooring; acorns were once a major food source.",
+    toxicity: "Raw acorns contain tannins that can be harmful — they need to be leached before eating.",
+    image_url: null,
+    wiki_url: 'https://en.wikipedia.org/wiki/Quercus_rubra',
+  },
+  {
+    key: 'trifolium_repens', plant_name: 'White Clover', scientific_name: 'Trifolium repens', emoji: '🍀',
+    base_points: 10,
+    about: "A four-leaf clover is rare — only about 1 in 5,000 plants grows one. Most clovers have three leaves.",
+    forage_note: "White clover flowers and young leaves are edible raw or cooked, with a mild sweet flavor.",
+    climate_impact: "Clover pulls nitrogen out of the air and into the soil, naturally fertilizing the ground around it.",
+    edible_parts: ['flowers', 'leaves'],
+    common_uses: "Ground cover, lawn alternative, livestock forage, traditional herbal tea.",
+    toxicity: "Generally safe in small amounts; large quantities of raw leaves can be hard to digest.",
+    image_url: null,
+    wiki_url: 'https://en.wikipedia.org/wiki/Trifolium_repens',
+  },
+  {
+    key: 'taraxacum_officinale', plant_name: 'Dandelion', scientific_name: 'Taraxacum officinale', emoji: '🌼',
+    base_points: 10,
+    about: "Every part of a dandelion is edible — roots, leaves, flowers, and even the puffball seeds!",
+    forage_note: "Pick young leaves before flowering for the mildest flavor; roots can be roasted into a coffee substitute.",
+    climate_impact: "Dandelions are one of the first food sources for bees in early spring — vital for pollinators waking from winter.",
+    edible_parts: ['leaves', 'flowers', 'roots'],
+    common_uses: "Salad greens, herbal teas, traditional medicine, wine-making.",
+    toxicity: "Generally non-toxic. People with latex allergies may react to the milky sap.",
+    image_url: null,
+    wiki_url: 'https://en.wikipedia.org/wiki/Taraxacum_officinale',
+  },
+];
+// Minimal-data plant for exercising the empty-category-hides behavior and the
+// Human Impact fallback (Plant.id returns nothing here).
+const SPARSE_DUMMY_PLANT = {
+  key: 'bryophyta_sp', plant_name: 'Mystery Moss', scientific_name: 'Bryophyta sp.', emoji: '🌿',
+  base_points: 10,
+  about: "Mosses are some of the oldest land plants on Earth — they've been around for over 400 million years.",
+  forage_note: '',
+  climate_impact: '',
+  edible_parts: [],
+  common_uses: '',
+  toxicity: '',
+  image_url: null,
+  wiki_url: '',
+};
+let _dummyIdx = 0;
+function dummyFind(opts = {}) {
+  const p = opts.sparse ? SPARSE_DUMMY_PLANT : DUMMY_PLANTS[(_dummyIdx++) % DUMMY_PLANTS.length];
+  const first = !!opts.first;
+  registerFind({
+    success: true,
+    key: p.key,
+    plant_name: p.plant_name,
+    scientific_name: p.scientific_name,
+    emoji: p.emoji,
+    points: first ? p.base_points * 2 : p.base_points,
+    is_first: first,
+    about: p.about,
+    forage_note: p.forage_note,
+    climate_impact: p.climate_impact,
+    image_url: p.image_url,
+    edible_parts: p.edible_parts,
+    common_uses: p.common_uses,
+    toxicity: p.toxicity,
+    wiki_url: p.wiki_url,
+    image_attribution: null,
+    description_attribution: null,
+    about_from_kindwise: false,
+  });
+}
+
 /* ───────── REGISTER A SUCCESSFUL FIND ───────── */
 function registerFind(r) {
   const find = {
@@ -1961,6 +2067,11 @@ document.getElementById('pin-input').addEventListener('input', (e) => {
 renderTopBar();
 renderLeaderboard();
 updateJournalCounts();
+
+// Reveal the dev panel only when ?dev=1 (or any 'dev' param) is in the URL.
+if (new URLSearchParams(location.search).has('dev')) {
+  document.getElementById('dev-panel').classList.add('expanded');
+}
 </script>
 </body>
 </html>
