@@ -1743,9 +1743,10 @@ function setAboutCredit(f) {
 // Two modes:
 //   'moment' (auto-shown right after a find): photo + name + fun fact + toxicity only.
 //   'detail' (tap a find in the my-finds list / post-hunt recap / journal): every category
-//   Plant.id returned (each section hides itself when empty), except Human Impact, which
-//   is always suppressed because it consistently feels off for the kid audience.
+//   Plant.id returned (each section hides itself when empty), PLUS Human Impact, which is
+//   always shown — falling back to a generic kid-friendly note when the API has nothing.
 // Accepts either a numeric index into state.myFinds or a find-shaped object.
+const HUMAN_IMPACT_FALLBACK = 'Plants like this one help our planet — they make oxygen, feed bugs and birds, and keep the soil healthy. 🌍';
 function openFindDetail(idxOrFind, mode = 'detail') {
   const f = (typeof idxOrFind === 'number') ? state.myFinds[idxOrFind] : idxOrFind;
   if (!f) return;
@@ -1766,8 +1767,6 @@ function openFindDetail(idxOrFind, mode = 'detail') {
   document.getElementById('detail-sci').textContent = f.scientific || '';
 
   const wiki = document.getElementById('detail-wiki');
-  // Always hidden — see header comment.
-  document.getElementById('detail-climate-sec').style.display = 'none';
 
   if (mode === 'moment') {
     setDetailSection('detail-about-sec', 'detail-about', f.about);
@@ -1776,6 +1775,7 @@ function openFindDetail(idxOrFind, mode = 'detail') {
     document.getElementById('detail-forage-sec').style.display = 'none';
     document.getElementById('detail-edible-sec').style.display = 'none';
     document.getElementById('detail-uses-sec').style.display = 'none';
+    document.getElementById('detail-climate-sec').style.display = 'none';
     wiki.style.display = 'none';
   } else {
     setDetailSection('detail-about-sec', 'detail-about', f.about);
@@ -1784,6 +1784,10 @@ function openFindDetail(idxOrFind, mode = 'detail') {
     setDetailChips('detail-edible-sec', 'detail-edible', f.edible);
     setDetailSection('detail-tox-sec', 'detail-tox', f.toxicity);
     setDetailSection('detail-uses-sec', 'detail-uses', f.uses);
+    // Human Impact: always render — use Plant.id's text if present, else the generic note.
+    const climateText = (f.climate && String(f.climate).trim()) ? f.climate : HUMAN_IMPACT_FALLBACK;
+    document.getElementById('detail-climate').textContent = climateText;
+    document.getElementById('detail-climate-sec').style.display = '';
     if (f.wiki) { wiki.href = f.wiki; wiki.style.display = 'block'; }
     else { wiki.style.display = 'none'; }
   }
