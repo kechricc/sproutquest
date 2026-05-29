@@ -784,7 +784,7 @@ input { font-family:var(--font); }
           </div>
           <button class="shutter-btn" id="shutter-btn" onclick="onShutter()">📸 Take Photo 1 of 3</button>
           <button class="retake-btn" id="retake-btn" onclick="clearCaptures()" style="display:none;">↺ Start over</button>
-          <label class="upload-fallback" id="upload-fallback">Camera blocked? Pick a photo instead
+          <label class="upload-fallback" id="upload-fallback">Camera blocked? Pick 2 photos instead
             <input type="file" accept="image/*" capture="environment" multiple id="file-input" onchange="onFilePicked(this)"/>
           </label>
         </div>
@@ -1415,7 +1415,7 @@ function stopCamera() {
 }
 
 /* ───────── IDENTIFY (collect REQUIRED_PHOTOS, then one Plant.id call) ───────── */
-const REQUIRED_PHOTOS = 1;
+const REQUIRED_PHOTOS = 2;
 let identifying = false;
 
 // Downscale a source to a JPEG data URL — keeps the 3-photo payload small.
@@ -1440,20 +1440,32 @@ function compressDataUrl(dataUrl) {
 
 // Progressive guidance, indexed by how many photos are already captured
 // (i.e. the prompt for the NEXT photo). Makes the "same plant, 3 angles" idea clear.
-const CAPTURE_PROMPTS = [
-  { btn: '📸 Take Photo (1 of 3)',     title: '📷 Photo 1 of 3', sub: 'Snap a clear photo of one plant' },
-  { btn: '📸 One more angle (2 of 3)', title: '📷 Photo 2 of 3', sub: 'Take one more of the SAME plant — from a slightly different angle' },
-  { btn: '📸 One last photo (3 of 3)', title: '📷 Photo 3 of 3', sub: 'One last photo of the same plant!' },
-];
+// Generated from REQUIRED_PHOTOS so the copy stays in sync if we flip the count again
+// (e.g. testing 1 vs 2 vs 3). Single-photo mode uses different copy handled in renderCaptureStrip.
+const CAPTURE_PROMPTS = Array.from({ length: REQUIRED_PHOTOS }, (_, i) => {
+  const n = REQUIRED_PHOTOS;
+  const isFirst = i === 0;
+  const isLast  = i === n - 1;
+  const sub = isFirst ? 'Snap a clear photo of one plant'
+            : isLast  ? 'One last photo of the same plant!'
+                      : 'Take one more of the SAME plant — from a slightly different angle';
+  const btn = isFirst ? `📸 Take Photo (1 of ${n})`
+            : isLast  ? `📸 One last photo (${i + 1} of ${n})`
+                      : `📸 One more angle (${i + 1} of ${n})`;
+  return { btn, title: `📷 Photo ${i + 1} of ${n}`, sub };
+});
 
 // Reflect state.captures in the thumbnail slots, the shutter button, and the hint.
 function renderCaptureStrip() {
   // The thumbnail strip only makes sense for multi-photo mode; hide it for single shots.
   const strip = document.getElementById('capture-strip');
   if (strip) strip.style.display = REQUIRED_PHOTOS === 1 ? 'none' : '';
-  for (let i = 0; i < REQUIRED_PHOTOS; i++) {
+  // The strip has 3 hardcoded slots in the DOM — hide any beyond what we need.
+  for (let i = 0; i < 3; i++) {
     const slot = document.getElementById('cap-slot-' + i);
     if (!slot) continue;
+    if (i >= REQUIRED_PHOTOS) { slot.style.display = 'none'; continue; }
+    slot.style.display = '';
     if (state.captures[i]) {
       slot.classList.add('filled');
       slot.innerHTML = `<img src="${state.captures[i]}" alt="">`;

@@ -58,7 +58,7 @@ PLANTID_DETAILS = "common_names,url,description,image,edible_parts,common_uses,t
 # Players submit this many photos per identification. We tried 3-photos-at-different-angles
 # (Plant.id supports it), but real-world logs showed combined probabilities so low that almost
 # everything got rejected — back to one photo until we have evidence it actually helps here.
-REQUIRED_PHOTOS = int(os.environ.get("REQUIRED_PHOTOS", "1"))
+REQUIRED_PHOTOS = int(os.environ.get("REQUIRED_PHOTOS", "2"))
 
 CODE_ALPHABET = string.ascii_uppercase + string.digits
 CODE_LENGTH = 6
