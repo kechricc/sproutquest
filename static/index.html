@@ -784,7 +784,7 @@ input { font-family:var(--font); }
           </div>
           <button class="shutter-btn" id="shutter-btn" onclick="onShutter()">📸 Take Photo 1 of 3</button>
           <button class="retake-btn" id="retake-btn" onclick="clearCaptures()" style="display:none;">↺ Start over</button>
-          <label class="upload-fallback" id="upload-fallback">Camera blocked? Pick 3 photos instead
+          <label class="upload-fallback" id="upload-fallback">Camera blocked? Pick a photo instead
             <input type="file" accept="image/*" capture="environment" multiple id="file-input" onchange="onFilePicked(this)"/>
           </label>
         </div>
@@ -1415,11 +1415,11 @@ function stopCamera() {
 }
 
 /* ───────── IDENTIFY (collect REQUIRED_PHOTOS, then one Plant.id call) ───────── */
-const REQUIRED_PHOTOS = 3;
+const REQUIRED_PHOTOS = 1;
 let identifying = false;
 
 // Downscale a source to a JPEG data URL — keeps the 3-photo payload small.
-function toScaledJpeg(srcW, srcH, drawFn, maxDim = 1280, quality = 0.82) {
+function toScaledJpeg(srcW, srcH, drawFn, maxDim = 1600, quality = 0.88) {
   let w = srcW, h = srcH;
   const m = Math.max(w, h);
   if (m > maxDim) { const s = maxDim / m; w = Math.round(w * s); h = Math.round(h * s); }
@@ -1448,6 +1448,9 @@ const CAPTURE_PROMPTS = [
 
 // Reflect state.captures in the thumbnail slots, the shutter button, and the hint.
 function renderCaptureStrip() {
+  // The thumbnail strip only makes sense for multi-photo mode; hide it for single shots.
+  const strip = document.getElementById('capture-strip');
+  if (strip) strip.style.display = REQUIRED_PHOTOS === 1 ? 'none' : '';
   for (let i = 0; i < REQUIRED_PHOTOS; i++) {
     const slot = document.getElementById('cap-slot-' + i);
     if (!slot) continue;
@@ -1461,14 +1464,20 @@ function renderCaptureStrip() {
   }
   if (identifying) return;   // the "Identifying…" copy is owned by setScanning
   const n = state.captures.length;
-  const p = CAPTURE_PROMPTS[Math.min(n, REQUIRED_PHOTOS - 1)];
   const btn = document.getElementById('shutter-btn');
-  if (btn) btn.textContent = n < REQUIRED_PHOTOS ? p.btn : '🔎 Identify Plant';
   const title = document.getElementById('scan-hint-title');
   const sub = document.getElementById('scan-hint-sub');
-  if (n < REQUIRED_PHOTOS) {
-    if (title) title.textContent = p.title;
-    if (sub) sub.textContent = p.sub;
+  if (REQUIRED_PHOTOS === 1) {
+    if (btn) btn.textContent = '📸 Identify Plant';
+    if (title) title.textContent = '📷 Point at a plant';
+    if (sub) sub.textContent = 'Hold steady · Center leaves in the frame';
+  } else {
+    const p = CAPTURE_PROMPTS[Math.min(n, REQUIRED_PHOTOS - 1)];
+    if (btn) btn.textContent = n < REQUIRED_PHOTOS ? p.btn : '🔎 Identify Plant';
+    if (n < REQUIRED_PHOTOS) {
+      if (title) title.textContent = p.title;
+      if (sub) sub.textContent = p.sub;
+    }
   }
   const retake = document.getElementById('retake-btn');
   if (retake) retake.style.display = n > 0 ? 'block' : 'none';

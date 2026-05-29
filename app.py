@@ -55,9 +55,10 @@ CONFIDENCE_THRESHOLD = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.95"))
 # which parts are edible, common human uses, and any toxicity warning.
 PLANTID_DETAILS = "common_names,url,description,image,edible_parts,common_uses,toxicity"
 
-# Players must submit this many photos of the same plant per identification; all of
-# them are sent together in one Plant.id call (multiple angles improve accuracy).
-REQUIRED_PHOTOS = int(os.environ.get("REQUIRED_PHOTOS", "3"))
+# Players submit this many photos per identification. We tried 3-photos-at-different-angles
+# (Plant.id supports it), but real-world logs showed combined probabilities so low that almost
+# everything got rejected — back to one photo until we have evidence it actually helps here.
+REQUIRED_PHOTOS = int(os.environ.get("REQUIRED_PHOTOS", "1"))
 
 CODE_ALPHABET = string.ascii_uppercase + string.digits
 CODE_LENGTH = 6
