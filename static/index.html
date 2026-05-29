@@ -451,6 +451,13 @@ input { font-family:var(--font); }
 .cel-sub { color:rgba(255,255,255,.85); font-size:16px; font-weight:800; }
 .cel-pts { color:var(--amber); font-size:48px; font-weight:900; margin:14px 0 4px; text-shadow:0 4px 12px rgba(245,158,11,.5); }
 .cel-first { background:var(--amber); color:#fff; font-size:13px; font-weight:900; padding:7px 16px; border-radius:99px; display:inline-block; margin-top:8px; box-shadow: 0 4px 0 #b45309; letter-spacing:.5px; }
+.cel-section { margin:14px auto 0; max-width:380px; text-align:left; background:rgba(255,255,255,.95); border-radius:14px; padding:10px 12px; }
+.cel-section.warn { background:#fef3c7; border:2px solid #fbbf24; }
+.cel-section-h { font-size:10px; font-weight:900; letter-spacing:1px; color:var(--green-d); margin-bottom:4px; }
+.cel-section.warn .cel-section-h { color:#92400e; }
+.cel-section > div:last-child { font-size:13px; font-weight:700; color:var(--text2); line-height:1.45; }
+.cel-dismiss { margin:18px auto 0; display:block; width:100%; max-width:320px; padding:14px 16px; border:0; border-radius:99px; background:#fff; color:var(--green-d); font-family:inherit; font-size:15px; font-weight:900; cursor:pointer; box-shadow:0 4px 0 var(--green-d), 0 6px 14px rgba(0,0,0,.25); }
+.cel-dismiss:active { transform:translateY(2px); box-shadow:0 2px 0 var(--green-d), 0 4px 10px rgba(0,0,0,.25); }
 
 .confetti-wrap { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
 .confetti-piece { position:absolute; width:10px; height:10px; top:-12px; animation: confettiFall linear forwards; }
@@ -493,7 +500,7 @@ input { font-family:var(--font); }
   overflow:hidden;
 }
 .end-confetti { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:1; }
-.end-inner { position:relative; z-index:2; flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.end-inner { position:relative; z-index:2; flex:1; display:flex; flex-direction:column; overflow-y:auto; }
 .end-hero {
   text-align:center; padding:40px 24px 20px; color:#fff; flex-shrink:0;
 }
@@ -517,9 +524,9 @@ input { font-family:var(--font); }
 .fs-stat-num { font-size:18px; font-weight:900; color:var(--text); }
 .fs-stat-lab { font-size:9px; font-weight:800; color:var(--text3); letter-spacing:.5px; margin-top:2px; }
 
-.recap-wrap { flex:1; margin:14px 18px 0; background:rgba(255,255,255,.95); border-radius:24px 24px 0 0; padding:14px 14px 0; display:flex; flex-direction:column; min-height:0; }
+.recap-wrap { margin:14px 18px 0; background:rgba(255,255,255,.95); border-radius:24px 24px 0 0; padding:14px 14px 0; }
 .recap-title { font-size:12px; font-weight:900; color:var(--text3); letter-spacing:1.5px; padding:4px 4px 8px; }
-.recap-scroll { flex:1; overflow-y:auto; padding-bottom:8px; }
+.recap-scroll { padding-bottom:8px; }
 .recap-scroll::-webkit-scrollbar { display:none; }
 
 .end-action {
@@ -824,7 +831,7 @@ input { font-family:var(--font); }
 
     <!-- CELEBRATION -->
     <div class="celebration" id="celebration">
-      <div class="cel-bg"></div>
+      <div class="cel-bg" onclick="hideCelebration()"></div>
       <div class="confetti-wrap" id="confetti-wrap"></div>
       <div class="cel-content">
         <div class="cel-emoji" id="cel-emoji">🍄</div>
@@ -832,6 +839,15 @@ input { font-family:var(--font); }
         <div class="cel-sub" id="cel-sub">Yellow Morel</div>
         <div class="cel-pts" id="cel-pts">+200 pts!</div>
         <div class="cel-first" id="cel-first" style="display:none;">⭐ FIRST FINDER · 2× BONUS!</div>
+        <div class="cel-section" id="cel-funfact-sec" style="display:none;">
+          <div class="cel-section-h">✨ FUN FACT</div>
+          <div id="cel-funfact"></div>
+        </div>
+        <div class="cel-section warn" id="cel-toxicity-sec" style="display:none;">
+          <div class="cel-section-h">⚠️ TOXICITY</div>
+          <div id="cel-toxicity"></div>
+        </div>
+        <button class="cel-dismiss" onclick="hideCelebration()">Keep hunting →</button>
       </div>
     </div>
 
@@ -875,7 +891,6 @@ input { font-family:var(--font); }
         <div class="recap-scroll" id="recap-scroll"></div>
       </div>
       <div class="end-action">
-        <button class="journal-link end" onclick="openJournal('end')">📔 View Plant Journal<span class="journal-count"></span></button>
         <button class="play-again-btn" onclick="playAgain()">🌿 Play Again</button>
       </div>
     </div>
@@ -916,7 +931,6 @@ input { font-family:var(--font); }
     <div class="detail-section" id="detail-uses-sec"><div class="detail-h">🛠️ COMMON USES</div><div id="detail-uses"></div></div>
     <div class="detail-section" id="detail-climate-sec"><div class="detail-h">🌍 HUMAN IMPACT</div><div id="detail-climate"></div></div>
     <a class="detail-wiki" id="detail-wiki" href="#" target="_blank" rel="noopener" style="display:none;">📖 Read more on Wikipedia →</a>
-    <div id="detail-later-hint" style="display:none;text-align:center;margin-top:14px;padding:14px 12px;border-radius:14px;background:#f3f6ee;color:var(--text2);font-weight:800;font-size:13px;">🌱 More about this plant unlocks after the hunt</div>
   </div>
 </div>
 
@@ -1686,7 +1700,7 @@ function renderJournal() {
 }
 function openJournalDetail(i) {
   const items = getJournalArray();
-  if (items[i]) openFindDetail(items[i], true);
+  if (items[i]) openFindDetail(items[i]);
 }
 
 /* ───────── PLANT DETAIL (tap a find) ───────── */
@@ -1739,11 +1753,11 @@ function setAboutCredit(f) {
   el.style.display = '';
 }
 
-// `full` defaults to false: during the hunt we show only the photo + name so kids can
-// stay in the game; the full fun-fact / foraging / impact card is reserved for the
-// post-hunt recap, where there's time to read. The first arg can be a numeric index
-// into state.myFinds (in-hunt callers) or a find-shaped object (journal callers).
-function openFindDetail(idxOrFind, full = false) {
+// Single mode: show every category Plant.id gave us (each section hides itself
+// when empty), except Human Impact, which we always suppress because the user
+// said it consistently feels off for the kid audience. Accepts either a numeric
+// index into state.myFinds or a find-shaped object (journal callers).
+function openFindDetail(idxOrFind) {
   const f = (typeof idxOrFind === 'number') ? state.myFinds[idxOrFind] : idxOrFind;
   if (!f) return;
   const img = document.getElementById('detail-img');
@@ -1762,28 +1776,16 @@ function openFindDetail(idxOrFind, full = false) {
   document.getElementById('detail-name').textContent = f.name || '';
   document.getElementById('detail-sci').textContent = f.scientific || '';
 
-  const sectionIds = ['detail-about-sec', 'detail-forage-sec', 'detail-edible-sec',
-                      'detail-tox-sec', 'detail-uses-sec', 'detail-climate-sec'];
+  setDetailSection('detail-about-sec', 'detail-about', f.about);
+  setAboutCredit(f);
+  setDetailSection('detail-forage-sec', 'detail-forage', f.forage);
+  setDetailChips('detail-edible-sec', 'detail-edible', f.edible);
+  setDetailSection('detail-tox-sec', 'detail-tox', f.toxicity);
+  setDetailSection('detail-uses-sec', 'detail-uses', f.uses);
+  document.getElementById('detail-climate-sec').style.display = 'none';
   const wiki = document.getElementById('detail-wiki');
-  const laterHint = document.getElementById('detail-later-hint');
-
-  if (!full) {
-    sectionIds.forEach(id => { document.getElementById(id).style.display = 'none'; });
-    document.getElementById('detail-about-credit').style.display = 'none';
-    wiki.style.display = 'none';
-    laterHint.style.display = '';
-  } else {
-    laterHint.style.display = 'none';
-    setDetailSection('detail-about-sec', 'detail-about', f.about);
-    setAboutCredit(f);
-    setDetailSection('detail-forage-sec', 'detail-forage', f.forage);
-    setDetailChips('detail-edible-sec', 'detail-edible', f.edible);
-    setDetailSection('detail-tox-sec', 'detail-tox', f.toxicity);
-    setDetailSection('detail-uses-sec', 'detail-uses', f.uses);
-    setDetailSection('detail-climate-sec', 'detail-climate', f.climate);
-    if (f.wiki) { wiki.href = f.wiki; wiki.style.display = 'block'; }
-    else { wiki.style.display = 'none'; }
-  }
+  if (f.wiki) { wiki.href = f.wiki; wiki.style.display = 'block'; }
+  else { wiki.style.display = 'none'; }
 
   document.getElementById('detail-modal').classList.add('show');
 }
@@ -1811,9 +1813,24 @@ function showCelebration(f) {
   else { title.textContent = 'Nice find!'; }
   document.getElementById('cel-sub').textContent = f.name;
 
+  // In-the-moment info: just fun fact + toxicity. Hide each section if Plant.id
+  // didn't return content for it. Full per-category info is in the my-finds card.
+  const funSec = document.getElementById('cel-funfact-sec');
+  const funBody = document.getElementById('cel-funfact');
+  if (f.about && String(f.about).trim()) { funBody.textContent = f.about; funSec.style.display = ''; }
+  else { funSec.style.display = 'none'; }
+  const toxSec = document.getElementById('cel-toxicity-sec');
+  const toxBody = document.getElementById('cel-toxicity');
+  if (f.toxicity && String(f.toxicity).trim()) { toxBody.textContent = f.toxicity; toxSec.style.display = ''; }
+  else { toxSec.style.display = 'none'; }
+
   cel.classList.add('show');
   spawnConfetti(document.getElementById('confetti-wrap'), f.first ? 'ul' : 'u');
-  setTimeout(() => cel.classList.remove('show'), f.first ? 3000 : 2000);
+  // No auto-dismiss now that we surface info — the kid taps "Keep hunting" or the
+  // backdrop when they're ready. First-finder toast still fires on its own timer.
+}
+function hideCelebration() {
+  document.getElementById('celebration').classList.remove('show');
 }
 
 const confettiColors = ['#5aaa1e','#86c34a','#f97316','#fbbf24','#ec4899','#8b5cf6','#3b82f6','#fff'];
@@ -1889,7 +1906,7 @@ function endHunt() {
     scroll.innerHTML = `<div style="text-align:center;padding:30px 12px;color:var(--text3);font-weight:800;font-size:13px;">No plants found this round. <br>Try again next hunt! 🌱</div>`;
   } else {
     scroll.innerHTML = state.myFinds.map((f, idx) => `
-      <div class="mf-row${f.first ? ' first' : ''}" style="margin-bottom:8px;" onclick="openFindDetail(${idx}, true)">
+      <div class="mf-row${f.first ? ' first' : ''}" style="margin-bottom:8px;" onclick="openFindDetail(${idx})">
         <div class="mf-emoji">${findBadge(f)}</div>
         <div class="mf-info">
           <div class="mf-name">${escapeHtml(f.name)} ${f.first ? '<span class="first-pill">FIRST!</span>' : ''}</div>
