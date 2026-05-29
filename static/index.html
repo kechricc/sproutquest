@@ -451,13 +451,6 @@ input { font-family:var(--font); }
 .cel-sub { color:rgba(255,255,255,.85); font-size:16px; font-weight:800; }
 .cel-pts { color:var(--amber); font-size:48px; font-weight:900; margin:14px 0 4px; text-shadow:0 4px 12px rgba(245,158,11,.5); }
 .cel-first { background:var(--amber); color:#fff; font-size:13px; font-weight:900; padding:7px 16px; border-radius:99px; display:inline-block; margin-top:8px; box-shadow: 0 4px 0 #b45309; letter-spacing:.5px; }
-.cel-section { margin:14px auto 0; max-width:380px; text-align:left; background:rgba(255,255,255,.95); border-radius:14px; padding:10px 12px; }
-.cel-section.warn { background:#fef3c7; border:2px solid #fbbf24; }
-.cel-section-h { font-size:10px; font-weight:900; letter-spacing:1px; color:var(--green-d); margin-bottom:4px; }
-.cel-section.warn .cel-section-h { color:#92400e; }
-.cel-section > div:last-child { font-size:13px; font-weight:700; color:var(--text2); line-height:1.45; }
-.cel-dismiss { margin:18px auto 0; display:block; width:100%; max-width:320px; padding:14px 16px; border:0; border-radius:99px; background:#fff; color:var(--green-d); font-family:inherit; font-size:15px; font-weight:900; cursor:pointer; box-shadow:0 4px 0 var(--green-d), 0 6px 14px rgba(0,0,0,.25); }
-.cel-dismiss:active { transform:translateY(2px); box-shadow:0 2px 0 var(--green-d), 0 4px 10px rgba(0,0,0,.25); }
 
 .confetti-wrap { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
 .confetti-piece { position:absolute; width:10px; height:10px; top:-12px; animation: confettiFall linear forwards; }
@@ -831,7 +824,7 @@ input { font-family:var(--font); }
 
     <!-- CELEBRATION -->
     <div class="celebration" id="celebration">
-      <div class="cel-bg" onclick="hideCelebration()"></div>
+      <div class="cel-bg"></div>
       <div class="confetti-wrap" id="confetti-wrap"></div>
       <div class="cel-content">
         <div class="cel-emoji" id="cel-emoji">🍄</div>
@@ -839,15 +832,6 @@ input { font-family:var(--font); }
         <div class="cel-sub" id="cel-sub">Yellow Morel</div>
         <div class="cel-pts" id="cel-pts">+200 pts!</div>
         <div class="cel-first" id="cel-first" style="display:none;">⭐ FIRST FINDER · 2× BONUS!</div>
-        <div class="cel-section" id="cel-funfact-sec" style="display:none;">
-          <div class="cel-section-h">✨ FUN FACT</div>
-          <div id="cel-funfact"></div>
-        </div>
-        <div class="cel-section warn" id="cel-toxicity-sec" style="display:none;">
-          <div class="cel-section-h">⚠️ TOXICITY</div>
-          <div id="cel-toxicity"></div>
-        </div>
-        <button class="cel-dismiss" onclick="hideCelebration()">Keep hunting →</button>
       </div>
     </div>
 
@@ -1616,10 +1600,13 @@ function registerFind(r) {
   renderTopBar();
   renderMyFinds();
   renderNotable();
-  showCelebration(find);
+  const celDuration = showCelebration(find);
   if (r.is_first) {
     setTimeout(() => showToast(r.emoji, 'First discovery!', `You found the first ${r.plant_name}! 2× points awarded.`), 800);
   }
+  // Once the celebration flash dismisses, open the find card so the kid sees the
+  // photo + fun fact + toxicity for what they just identified.
+  setTimeout(() => openFindDetail(find, 'moment'), celDuration + 200);
 }
 
 /* ───────── PLANT JOURNAL (localStorage, cross-game) ───────── */
@@ -1753,11 +1740,13 @@ function setAboutCredit(f) {
   el.style.display = '';
 }
 
-// Single mode: show every category Plant.id gave us (each section hides itself
-// when empty), except Human Impact, which we always suppress because the user
-// said it consistently feels off for the kid audience. Accepts either a numeric
-// index into state.myFinds or a find-shaped object (journal callers).
-function openFindDetail(idxOrFind) {
+// Two modes:
+//   'moment' (auto-shown right after a find): photo + name + fun fact + toxicity only.
+//   'detail' (tap a find in the my-finds list / post-hunt recap / journal): every category
+//   Plant.id returned (each section hides itself when empty), except Human Impact, which
+//   is always suppressed because it consistently feels off for the kid audience.
+// Accepts either a numeric index into state.myFinds or a find-shaped object.
+function openFindDetail(idxOrFind, mode = 'detail') {
   const f = (typeof idxOrFind === 'number') ? state.myFinds[idxOrFind] : idxOrFind;
   if (!f) return;
   const img = document.getElementById('detail-img');
@@ -1776,16 +1765,28 @@ function openFindDetail(idxOrFind) {
   document.getElementById('detail-name').textContent = f.name || '';
   document.getElementById('detail-sci').textContent = f.scientific || '';
 
-  setDetailSection('detail-about-sec', 'detail-about', f.about);
-  setAboutCredit(f);
-  setDetailSection('detail-forage-sec', 'detail-forage', f.forage);
-  setDetailChips('detail-edible-sec', 'detail-edible', f.edible);
-  setDetailSection('detail-tox-sec', 'detail-tox', f.toxicity);
-  setDetailSection('detail-uses-sec', 'detail-uses', f.uses);
-  document.getElementById('detail-climate-sec').style.display = 'none';
   const wiki = document.getElementById('detail-wiki');
-  if (f.wiki) { wiki.href = f.wiki; wiki.style.display = 'block'; }
-  else { wiki.style.display = 'none'; }
+  // Always hidden — see header comment.
+  document.getElementById('detail-climate-sec').style.display = 'none';
+
+  if (mode === 'moment') {
+    setDetailSection('detail-about-sec', 'detail-about', f.about);
+    setAboutCredit(f);
+    setDetailSection('detail-tox-sec', 'detail-tox', f.toxicity);
+    document.getElementById('detail-forage-sec').style.display = 'none';
+    document.getElementById('detail-edible-sec').style.display = 'none';
+    document.getElementById('detail-uses-sec').style.display = 'none';
+    wiki.style.display = 'none';
+  } else {
+    setDetailSection('detail-about-sec', 'detail-about', f.about);
+    setAboutCredit(f);
+    setDetailSection('detail-forage-sec', 'detail-forage', f.forage);
+    setDetailChips('detail-edible-sec', 'detail-edible', f.edible);
+    setDetailSection('detail-tox-sec', 'detail-tox', f.toxicity);
+    setDetailSection('detail-uses-sec', 'detail-uses', f.uses);
+    if (f.wiki) { wiki.href = f.wiki; wiki.style.display = 'block'; }
+    else { wiki.style.display = 'none'; }
+  }
 
   document.getElementById('detail-modal').classList.add('show');
 }
@@ -1801,6 +1802,8 @@ function findBadge(f) {
 }
 
 /* ───────── CELEBRATION ───────── */
+// Returns how long the celebration is on-screen so callers can time follow-ups
+// (e.g. auto-opening the find card once this flash dismisses).
 function showCelebration(f) {
   const cel = document.getElementById('celebration');
   document.getElementById('cel-emoji').textContent = f.emoji;
@@ -1813,24 +1816,11 @@ function showCelebration(f) {
   else { title.textContent = 'Nice find!'; }
   document.getElementById('cel-sub').textContent = f.name;
 
-  // In-the-moment info: just fun fact + toxicity. Hide each section if Plant.id
-  // didn't return content for it. Full per-category info is in the my-finds card.
-  const funSec = document.getElementById('cel-funfact-sec');
-  const funBody = document.getElementById('cel-funfact');
-  if (f.about && String(f.about).trim()) { funBody.textContent = f.about; funSec.style.display = ''; }
-  else { funSec.style.display = 'none'; }
-  const toxSec = document.getElementById('cel-toxicity-sec');
-  const toxBody = document.getElementById('cel-toxicity');
-  if (f.toxicity && String(f.toxicity).trim()) { toxBody.textContent = f.toxicity; toxSec.style.display = ''; }
-  else { toxSec.style.display = 'none'; }
-
   cel.classList.add('show');
   spawnConfetti(document.getElementById('confetti-wrap'), f.first ? 'ul' : 'u');
-  // No auto-dismiss now that we surface info — the kid taps "Keep hunting" or the
-  // backdrop when they're ready. First-finder toast still fires on its own timer.
-}
-function hideCelebration() {
-  document.getElementById('celebration').classList.remove('show');
+  const duration = f.first ? 3000 : 2000;
+  setTimeout(() => cel.classList.remove('show'), duration);
+  return duration;
 }
 
 const confettiColors = ['#5aaa1e','#86c34a','#f97316','#fbbf24','#ec4899','#8b5cf6','#3b82f6','#fff'];
